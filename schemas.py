@@ -1,48 +1,66 @@
 """
-Database Schemas
+Database Schemas for PFA
 
-Define your MongoDB collection schemas here using Pydantic models.
-These schemas are used for data validation in your application.
-
-Each Pydantic model represents a collection in your database.
-Model name is converted to lowercase for the collection name:
-- User -> "user" collection
-- Product -> "product" collection
-- BlogPost -> "blogs" collection
+Define MongoDB collection schemas here using Pydantic models.
+Each Pydantic model represents a collection in the database.
+Collection name is lowercase of the class name.
 """
 
-from pydantic import BaseModel, Field
-from typing import Optional
+from pydantic import BaseModel, Field, EmailStr
+from typing import Optional, List, Literal
+from datetime import date
 
-# Example schemas (replace with your own):
-
+# Auth/User
 class User(BaseModel):
-    """
-    Users collection schema
-    Collection name: "user" (lowercase of class name)
-    """
-    name: str = Field(..., description="Full name")
-    email: str = Field(..., description="Email address")
-    address: str = Field(..., description="Address")
-    age: Optional[int] = Field(None, ge=0, le=120, description="Age in years")
-    is_active: bool = Field(True, description="Whether user is active")
+    email: EmailStr = Field(..., description="User email")
+    hashed_password: str = Field(..., description="BCrypt hashed password")
+    full_name: Optional[str] = Field(None, description="Full name")
+    locale: str = Field("he", description="UI language, default Hebrew")
 
-class Product(BaseModel):
-    """
-    Products collection schema
-    Collection name: "product" (lowercase of class name)
-    """
-    title: str = Field(..., description="Product title")
-    description: Optional[str] = Field(None, description="Product description")
-    price: float = Field(..., ge=0, description="Price in dollars")
-    category: str = Field(..., description="Product category")
-    in_stock: bool = Field(True, description="Whether product is in stock")
+# Documents uploaded by users
+class Document(BaseModel):
+    user_id: str = Field(..., description="Owner user id")
+    filename: str = Field(..., description="Original file name")
+    content_type: str = Field(..., description="MIME type")
+    size_bytes: int = Field(..., ge=0)
+    storage_path: str = Field(..., description="Path in storage")
+    doc_type: Literal["paystub","bank","credit","loan"] = Field(..., description="Detected document type")
+    month: int = Field(..., ge=1, le=12)
+    year: int = Field(..., ge=1900, le=2100)
+    status: Literal["uploaded","processed","failed"] = Field("uploaded")
 
-# Add your own schemas here:
-# --------------------------------------------------
+# Extracted transactions (normalized)
+class Transaction(BaseModel):
+    user_id: str
+    doc_id: str
+    date: date
+    description: str
+    amount: float = Field(..., description="Positive for income, negative for expense")
+    category: str = Field("Uncategorized")
+    source: Literal["bank","credit","paystub","manual"] = "manual"
+    month: int
+    year: int
 
-# Note: The Flames database viewer will automatically:
-# 1. Read these schemas from GET /schema endpoint
-# 2. Use them for document validation when creating/editing
-# 3. Handle all database operations (CRUD) directly
-# 4. You don't need to create any database endpoints!
+# Sharing links with permissions
+class ShareLink(BaseModel):
+    user_id: str
+    token: str
+    scope: Literal["dashboard","report"] = "dashboard"
+    permission: Literal["view","edit"] = "view"
+    expires_at: Optional[str] = None
+    approved: bool = False
+
+# Simple categories configuration
+class Category(BaseModel):
+    user_id: str
+    name: str
+    color: Optional[str] = None
+
+# Helper response models
+class CashflowSummary(BaseModel):
+    month: int
+    year: int
+    income: float
+    expense: float
+    net: float
+    by_category: List[dict]
