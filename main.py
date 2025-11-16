@@ -133,6 +133,26 @@ def login(form_data: OAuth2PasswordRequestForm = Depends()):
     return Token(access_token=token)
 
 
+# NEW: Guest access for quick preview without registration
+@app.post("/auth/guest", response_model=Token)
+def guest_access():
+    """
+    Create a temporary guest user and return a JWT. Guest users are regular users
+    stored in the database with a unique email and a random hashed password.
+    """
+    from secrets import token_urlsafe
+
+    # Generate a unique guest email
+    suffix = token_urlsafe(8)
+    email = f"guest-{suffix}@example.com"
+    hashed = get_password_hash(token_urlsafe(16))
+    user_doc = UserSchema(email=email, hashed_password=hashed, full_name="Guest", locale="he")
+    create_document("user", user_doc)
+
+    token = create_access_token({"sub": email}, expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+    return Token(access_token=token)
+
+
 # ---------------------------
 # Documents Upload & Processing
 # ---------------------------
